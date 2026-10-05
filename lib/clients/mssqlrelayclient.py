@@ -39,37 +39,7 @@ class MYMSSQL(MSSQL):
 
     def initConnection(self, authdata, kdc=None):
         self.connect()
-        # This is copied from tds.py
-        resp = self.preLogin()
-        if (
-            resp["Encryption"] == TDS_ENCRYPT_REQ
-            or resp["Encryption"] == TDS_ENCRYPT_OFF
-        ):
-            LOG.debug("Encryption required, switching to TLS")
-
-            # Switching to TLS now
-            ctx = SSL.Context(SSL.TLS_METHOD)
-            ctx.set_cipher_list("ALL:@SECLEVEL=0".encode("utf-8"))
-            tls = SSL.Connection(ctx, None)
-            tls.set_connect_state()
-
-            while True:
-                try:
-                    tls.do_handshake()
-                except SSL.WantReadError:
-                    data = tls.bio_read(4096)
-                    self.sendTDS(TDS_PRE_LOGIN, data, 0)
-                    tds = self.recvTDS()
-                    tls.bio_write(tds["Data"])
-                else:
-                    break
-
-            # SSL and TLS limitation: Secure Socket Layer (SSL) and its replacement,
-            # Transport Layer Security(TLS), limit data fragments to 16k in size.
-            self.packetSize = 16 * 1024 - 1
-            self.tlsSocket = tls
-
-        self.resp = resp
+        self.resp = self._negotiate_encryption()
         return self.doInitialActions(authdata, kdc)
 
     def doInitialActions(self, authdata, kdc=None):
